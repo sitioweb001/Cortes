@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visor de Cortes — Pieza Isométrica</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#0b1120; font-family: monospace; color:#e2e8f0; overflow:hidden; height:100vh; }
+#app { display:grid; grid-template-rows:48px 1fr; height:100vh; }
+#topbar { background:#0d1626; border-bottom:1px solid #1e3a5f; display:flex; align-items:center; padding:0 20px; gap:16px; }
+#topbar h1 { font-size:11px; letter-spacing:.15em; color:#00d4ff; text-transform:uppercase; }
+.chip { font-size:10px; padding:2px 8px; border-radius:2px; letter-spacing:.08em; }
+.chip-a { border:1px solid #00d4ff; color:#00d4ff; background:rgba(0,212,255,.08); }
+.chip-b { border:1px solid #ff6b35; color:#ff6b35; background:rgba(255,107,53,.08); }
+#main { display:grid; grid-template-columns:1fr 1fr 1.4fr; gap:1px; background:#1e3a5f; overflow:hidden; }
+.panel { background:#0b1120; display:flex; flex-direction:column; overflow:hidden; }
+.ph { background:#0d1626; padding:8px 14px; border-bottom:1px solid #1e3a5f; display:flex; align-items:center; gap:8px; flex-shrink:0; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#94a3b8; }
+.pw { flex:1; position:relative; }
+canvas { display:block; }
+#c3wrap { flex:1; position:relative; cursor:grab; }
+#c3wrap:active { cursor:grabbing; }
+.ctrls { position:absolute; bottom:12px; right:12px; display:flex; flex-direction:column; gap:5px; }
+.btn { padding:4px 10px; background:rgba(0,212,255,.08); border:1px solid #00d4ff44; color:#00d4ff; font-family:monospace; font-size:9px; cursor:pointer; letter-spacing:.08em; transition:background .15s; }
+.btn:hover { background:rgba(0,212,255,.2); }
+.btn.off { border-color:#334155; color:#475569; background:transparent; }
+.hint { position:absolute; top:8px; left:10px; font-size:9px; color:#334155; line-height:2; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>Visor de Cortes &middot; Pieza Isometrica</h1>
+    <span class="chip chip-a">A-A @ 20 mm</span>
+    <span class="chip chip-b">B-B @ 30 mm</span>
+    <span style="margin-left:auto;font-size:9px;color:#334155">72x40x40 mm</span>
+  </div>
+  <div id="main">
+    <div class="panel">
+      <div class="ph"><span style="color:#00d4ff">&#9635;</span> Seccion A-A &nbsp;·&nbsp; y = 20 mm</div>
+      <div class="pw"><canvas id="c1"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span style="color:#ff6b35">&#9635;</span> Seccion B-B &nbsp;·&nbsp; y = 30 mm</div>
+      <div class="pw"><canvas id="c2"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><span style="color:#39ff14">&#11043;</span> Vista 3D &middot; Arrastrar para rotar</div>
+      <div id="c3wrap">
+        <canvas id="c3"></canvas>
+        <div class="hint">DRAG Rotar · SCROLL Zoom</div>
+        <div class="ctrls">
+          <button class="btn" id="bReset">&#8634; RESET</button>
+          <button class="btn" id="bA">&#9672; CORTE A</button>
+          <button class="btn" id="bB">&#9672; CORTE B</button>
+          <button class="btn" id="bSolid">&#9647; SOLIDO</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+var W=72,H=40,D=40;
+var P=[
+  {x:0,z:0},{x:72,z:0},{x:72,z:40},{x:64,z:40},{x:64,z:32},
+  {x:56,z:32},{x:56,z:40},{x:40,z:40},{x:40,z:32},{x:24,z:32},
+  {x:24,z:40},{x:0,z:40},{x:0,z:24},{x:24,z:24},{x:24,z:0}
+];
+function drawSection(id,color,cutY){
+  var cv=document.getElementById(id);
+  var pw=cv.parentElement;
+  cv.width=pw.clientWidth;cv.height=pw.clientHeight;
+  var ctx=cv.getContext('2d');
+  var cw=cv.width,ch=cv.height;
+  ctx.fillStyle='#0a0e1a';ctx.fillRect(0,0,cw,ch);
+  ctx.strokeStyle='rgba(30,58,95,0.4)';ctx.lineWidth=0.5;
+  for(var x=0;x<cw;x+=16){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ch);ctx.stroke();}
+  for(var y=0;y<ch;y+=16){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke();}
+  var mg=52;
+  var scl=Math.min((cw-mg*2)/W,(ch-mg*2)/H);
+  var ox=(cw-W*scl)/2;
+  var tx=function(x){return ox+x*scl;};
+  var tz=function(z){return ch-mg-z*scl;};
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(tx(P[0].x),tz(P[0].z));
+  P.forEach(function(p){ctx.lineTo(tx(p.x),tz(p.z));});
+  ctx.closePath();
+  ctx.fillStyle=color+'18';ctx.fill();
+  var hc=document.createElement('canvas');hc.width=8;hc.height=8;
+  var hx=hc.getContext('2d');
+  hx.strokeStyle=color;hx.lineWidth=0.7;hx.globalAlpha=0.5;
+  hx.beginPath();hx.moveTo(0,8);hx.lineTo(8,0);hx.stroke();
+  ctx.save();ctx.clip();
+  ctx.fillStyle=ctx.createPattern(hc,'repeat');
+  ctx.fillRect(0,0,cw,ch);
+  ctx.restore();
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(tx(P[0].x),tz(P[0].z));
+  P.forEach(function(p){ctx.lineTo(tx(p.x),tz(p.z));});
+  ctx.closePath();ctx.stroke();
+  ctx.restore();
+  function dimH(x0,x1,z,lbl){
+    var yp=tz(z)-22;
+    ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(tx(x0),yp);ctx.lineTo(tx(x1),yp);ctx.stroke();
+    ctx.setLineDash([]);ctx.strokeStyle='#475569';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.moveTo(tx(x0),yp-4);ctx.lineTo(tx(x0),yp+4);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(tx(x1),yp-4);ctx.lineTo(tx(x1),yp+4);ctx.stroke();
+    ctx.fillStyle='#94a3b8';ctx.font='10px monospace';ctx.textAlign='center';
+    ctx.fillText(lbl,tx((x0+x1)/2),yp-5);
+  }
+  function dimV(x,z0,z1,lbl,left){
+    var xp=tx(x)+(left?-20:18);
+    ctx.strokeStyle='#334155';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(xp,tz(z0));ctx.lineTo(xp,tz(z1));ctx.stroke();
+    ctx.setLineDash([]);ctx.strokeStyle='#475569';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.moveTo(xp-4,tz(z0));ctx.lineTo(xp+4,tz(z0));ctx.stroke();
+    ctx.beginPath();ctx.moveTo(xp-4,tz(z1));ctx.lineTo(xp+4,tz(z1));ctx.stroke();
+    ctx.fillStyle='#94a3b8';ctx.font='10px monospace';ctx.textAlign='left';
+    ctx.fillText(lbl,xp+(left?-ctx.measureText(lbl).width-6:5),tz((z0+z1)/2)+4);
+  }
+  dimH(0,72,0,'72 mm');dimH(0,24,40,'24 mm');dimH(40,56,32,'16 mm');
+  dimV(72,0,40,'40 mm');dimV(0,24,40,'16 mm',true);dimV(64,32,40,'8 mm');
+  ctx.fillStyle='#475569';ctx.font='9px monospace';ctx.textAlign='left';
+  ctx.fillText('X ->',tx(W)+4,tz(0)+3);ctx.fillText('Z ^',tx(0)-10,tz(H)-6);
+  ctx.fillStyle=color;ctx.font='bold 11px monospace';ctx.textAlign='right';
+  ctx.fillText('Y = '+cutY+' mm',cw-8,20);
+}
+var rx=0.42,ry=-0.55,zoom=1.0;
+var showA=true,showB=true,showSolid=true;
+var drag=false,lx=0,ly=0;
+function proj3(x,y,z){
+  x-=W/2;y-=H/2;z-=D/2;
+  var x1=x*Math.cos(ry)+z*Math.sin(ry);
+  var z1=-x*Math.sin(ry)+z*Math.cos(ry);
+  var y2=y*Math.cos(rx)-z1*Math.sin(rx);
+  var z2=y*Math.sin(rx)+z1*Math.cos(rx);
+  var cv=document.getElementById('c3');
+  var sc=Math.min(cv.width,cv.height)*0.0065*zoom;
+  var cx=cv.width/2,cy=cv.height/2+10;
+  return{px:cx+x1*sc,py:cy-y2*sc+z2*0.18*sc,dz:z2};
+}
+function draw3d(){
+  var cv=document.getElementById('c3');
+  var wrap=document.getElementById('c3wrap');
+  cv.width=wrap.clientWidth;cv.height=wrap.clientHeight;
+  var ctx=cv.getContext('2d');
+  var cw=cv.width,ch=cv.height;
+  ctx.fillStyle='#09111f';ctx.fillRect(0,0,cw,ch);
+  ctx.strokeStyle='rgba(30,58,95,0.25)';ctx.lineWidth=0.5;
+  for(var x=0;x<cw;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,ch);ctx.stroke();}
+  for(var y=0;y<ch;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cw,y);ctx.stroke();}
+  var faces=[];
+  function face(pts,fill,stroke,lw){
+    var pp=pts.map(function(p){return proj3(p[0],p[1],p[2]);});
+    var z=pp.reduce(function(s,p){return s+p.dz;},0)/pp.length;
+    faces.push({pp:pp,fill:fill,stroke:stroke,lw:lw||1,z:z});
+  }
+  if(showSolid){
+    face([[0,0,0],[W,0,0],[W,0,D],[0,0,D]],'#091a30','#1e3a5f88',0.5);
+    face([[0,0,D],[W,0,D],[W,H,D],[0,H,D]],'#0c1f38','#1e3a5f88',0.5);
+    face([[W,0,0],[W,H,0],[W,H,D],[W,0,D]],'#0d2244','#1e4a7088',0.5);
+    face([[0,0,0],[0,0,D],[0,24,D],[0,24,0]],'#0c1e3c','#1e3a5f88',0.5);
+    face([[24,24,0],[24,H,0],[24,H,D],[24,24,D]],'#102848','#00d4ff22',0.5);
+    face([[0,24,0],[24,24,0],[24,24,D],[0,24,D]],'#0d2240','#00d4ff22',0.5);
+    face([[0,0,0],[24,0,0],[24,24,0],[0,24,0]],'#1a3a60','#00d4ff66',1);
+    face([[24,0,0],[40,0,0],[40,H,0],[24,H,0]],'#193860','#1e4a70',0.8);
+    face([[56,0,0],[64,0,0],[64,H,0],[56,H,0]],'#193860','#1e4a70',0.8);
+    face([[64,0,0],[W,0,0],[W,H,0],[64,H,0]],'#1a3a60','#1e4a70',0.8);
+    face([[40,32,0],[56,32,0],[56,H,0],[40,H,0]],'#1a3a60','#ff6b3544',0.8);
+    face([[24,H,0],[40,H,0],[40,H,D],[24,H,D]],'#1a3860','#2a4a7088',0.5);
+    face([[56,H,0],[W,H,0],[W,H,D],[56,H,D]],'#1a3860','#2a4a7088',0.5);
+    face([[40,32,0],[56,32,0],[56,32,D],[40,32,D]],'#1a3a70','#00d4ff33',0.8);
+    face([[40,32,0],[40,H,0],[40,H,D],[40,32,D]],'#132038','#334155',0.5);
+    face([[56,32,0],[56,H,0],[56,H,D],[56,32,D]],'#132038','#334155',0.5);
+  }
+  function cutPlane(cutZ,col){
+    var pts=P.map(function(p){return[p.x,p.z,cutZ];});
+    var pp=pts.map(function(p){return proj3(p[0],p[1],p[2]);});
+    var z=pp.reduce(function(s,p){return s+p.dz;},0)/pp.length;
+    faces.push({pp:pp,fill:col+'22',stroke:col,lw:2,z:z});
+  }
+  if(showA)cutPlane(20,'#00d4ff');
+  if(showB)cutPlane(30,'#ff6b35');
+  faces.sort(function(a,b){return b.z-a.z;});
+  faces.forEach(function(f){
+    ctx.beginPath();
+    ctx.moveTo(f.pp[0].px,f.pp[0].py);
+    f.pp.forEach(function(p){ctx.lineTo(p.px,p.py);});
+    ctx.closePath();
+    if(f.fill){ctx.fillStyle=f.fill;ctx.fill();}
+    if(f.stroke){ctx.strokeStyle=f.stroke;ctx.lineWidth=f.lw;ctx.lineJoin='round';ctx.stroke();}
+  });
+  if(showA){
+    var p=proj3(0,0,20),p2=proj3(W,0,20);
+    ctx.strokeStyle='#00d4ff';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+    ctx.beginPath();ctx.moveTo(p.px,p.py);ctx.lineTo(p2.px,p2.py);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#00d4ff';ctx.font='bold 10px monospace';ctx.textAlign='left';
+    ctx.fillText('A-A 20mm',p2.px+4,p2.py+3);
+  }
+  if(showB){
+    var p=proj3(0,0,30),p2=proj3(W,0,30);
+    ctx.strokeStyle='#ff6b35';ctx.lineWidth=1.5;ctx.setLineDash([5,3]);
+    ctx.beginPath();ctx.moveTo(p.px,p.py);ctx.lineTo(p2.px,p2.py);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#ff6b35';ctx.font='bold 10px monospace';ctx.textAlign='left';
+    ctx.fillText('B-B 30mm',p2.px+4,p2.py+3);
+  }
+  var ax=proj3(-8,-8,-8),aX=proj3(8,-8,-8),aY=proj3(-8,8,-8),aZ=proj3(-8,-8,8);
+  function axl(a,b,col,t){
+    ctx.strokeStyle=col;ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(a.px,a.py);ctx.lineTo(b.px,b.py);ctx.stroke();
+    ctx.fillStyle=col;ctx.font='8px monospace';ctx.textAlign='left';
+    ctx.fillText(t,b.px+2,b.py+3);
+  }
+  axl(ax,aX,'#e05555','X');axl(ax,aY,'#55bb55','Y(H)');axl(ax,aZ,'#5599dd','Z(D)');
+}
+function refresh(){
+  drawSection('c1','#00d4ff',20);
+  drawSection('c2','#ff6b35',30);
+  draw3d();
+}
+var c3w=document.getElementById('c3wrap');
+c3w.addEventListener('mousedown',function(e){drag=true;lx=e.clientX;ly=e.clientY;});
+window.addEventListener('mouseup',function(){drag=false;});
+window.addEventListener('mousemove',function(e){
+  if(!drag)return;
+  ry+=(e.clientX-lx)*0.009;rx-=(e.clientY-ly)*0.009;
+  lx=e.clientX;ly=e.clientY;draw3d();
+});
+c3w.addEventListener('wheel',function(e){
+  zoom*=e.deltaY>0?0.93:1.08;zoom=Math.max(0.3,Math.min(5,zoom));
+  draw3d();e.preventDefault();
+},{passive:false});
+var ltx=0,lty=0;
+c3w.addEventListener('touchstart',function(e){ltx=e.touches[0].clientX;lty=e.touches[0].clientY;});
+c3w.addEventListener('touchmove',function(e){
+  ry+=(e.touches[0].clientX-ltx)*0.012;rx-=(e.touches[0].clientY-lty)*0.012;
+  ltx=e.touches[0].clientX;lty=e.touches[0].clientY;draw3d();e.preventDefault();
+},{passive:false});
+document.getElementById('bReset').onclick=function(){rx=0.42;ry=-0.55;zoom=1;draw3d();};
+document.getElementById('bA').onclick=function(){showA=!showA;this.classList.toggle('off',!showA);draw3d();};
+document.getElementById('bB').onclick=function(){showB=!showB;this.classList.toggle('off',!showB);draw3d();};
+document.getElementById('bSolid').onclick=function(){showSolid=!showSolid;this.classList.toggle('off',!showSolid);draw3d();};
+window.addEventListener('resize',refresh);
+refresh();
+</script>
+</body>
+</html>
